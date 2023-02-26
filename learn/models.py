@@ -9,17 +9,24 @@ from django.core.files.storage import FileSystemStorage
 # Auth
 from django.contrib.auth.models import AbstractUser
 
+# Time
+from django.utils import timezone
+from django.utils.timezone import timedelta
+
 # Language
 from nltk.tokenize import word_tokenize
 from nltk.tokenize.util import align_tokens
-from wordfreq import word_frequency
 
 # Learning
 import ebisu
 
 # Other
 from django.conf import settings
-from django.utils.html import escape
+
+
+def duration_to_hours(td):
+    """Get hours from timedelta as float"""
+    return td / timedelta(hours=1)
 
 
 class Language(models.Model):
@@ -39,6 +46,8 @@ class Sentence(models.Model):
     lang = models.ForeignKey(Language, related_name="sentences", on_delete=models.CASCADE)
 
     text = models.TextField()
+
+    link_id = models.PositiveIntegerField(null=True, blank=True, editable=False)
 
     audio = models.FileField(storage=FileSystemStorage(location="data", base_url="/data"), null=True, blank=True)
     translations = models.ManyToManyField("Sentence", blank=True, related_name="translation_of")
@@ -68,6 +77,13 @@ class Task(models.Model):
     sentence = models.ForeignKey(Sentence, on_delete=models.CASCADE, related_name="tasks")
     hidden = models.PositiveSmallIntegerField()
 
+    def __str__(self):
+        return f"{self.before}<X>{self.after}"
+
+    @property
+    def correct(self):
+        return self.sentence.tokens[self.hidden]
+
     @property
     def before(self):
         return self.sentence.text[:self.sentence.spans[self.hidden][0]]
@@ -95,18 +111,21 @@ class UserTaskProgress(models.Model):
     # Basic information
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_progress")
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="user_progress")
-    last_review = models.DateTimeField(auto_now=True)
+    last_review = models.DateTimeField()
 
     # Spaced repetition parameters
     alpha = models.FloatField(default=3.0)
     beta = models.FloatField(default=3.0)
     interval = models.DurationField(null=True) # hours
 
+    def __str__(self):
+        return f"{self.user}: {self.task}"
+
     def attempt(self, success, time=None, save=True):
         if time is None:
             time = timezone.now()
 
-        if self.last_review is None:
+        if self.interval is None:
             self.interval = timedelta(hours=settings.INITIAL_INTERVAL[success])
         else:
             model = (self.alpha, self.beta, duration_to_hours(self.interval))
