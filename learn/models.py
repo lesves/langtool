@@ -163,5 +163,9 @@ class UserTaskProgress(models.Model):
 
 
 class Course(models.Model):
-    language = models.ForeignKey(Language, related_name="courses", on_delete=models.CASCADE)
+    name = models.CharField(max_length=128)
+    lang = models.ForeignKey(Language, related_name="courses", on_delete=models.CASCADE)
     tasks = models.ManyToManyField(Task, related_name="courses")
+
+    def __str__(self):
+        return self.name
