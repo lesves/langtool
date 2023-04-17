@@ -129,4 +129,13 @@ AUTH_USER_MODEL = "learn.User"
 
 # App-specific config
 
+LANGTOOL_LANGUAGES = [
+    ("cs", "Czech", "Čeština"),
+    ("ru", "Russian", "Русский"),
+]
+
+LANGTOOL_LANGUAGE_PAIRS = [
+    ("cs", "ru"),
+]
+
 INITIAL_INTERVAL = (0.25, 4) # (failure, success) in hours
