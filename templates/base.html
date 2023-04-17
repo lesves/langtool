@@ -1,0 +1,24 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>LangTool</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap" rel="stylesheet" />
+
+		<link rel="stylesheet" type="text/css" href="{% static 'main.css' %}" />
+
+		{% block extrahead %}
+		{% endblock %}
+	</head>
+	<body>
+		<main>
+			{% block content %}
+			{% endblock %}
+		</main>
+	</body>
+</html>

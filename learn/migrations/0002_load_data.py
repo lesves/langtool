@@ -18,7 +18,7 @@ def load_sentences(apps, schema_editor):
     Language.objects.bulk_create([
         Language(code="cs", name="Czech", native_name="Čeština"),
         Language(code="ru", name="Russian", native_name="Русский"),
-    ])
+    ], ignore_conflicts=True)
 
     Sentence = apps.get_model("learn", "Sentence")
 
@@ -85,7 +85,7 @@ def create_courses(apps, schema_editor):
         writing = Course.objects.create(lang=lang, name=f"{lang.name} words in context")
         listening = Course.objects.create(lang=lang, name=f"{lang.name} listening")
 
-        writing.tasks.set(Task.objects.filter(sentence__lang=lang))
+        writing.tasks.set(Task.objects.filter(sentence__lang=lang, sentence__translations__isnull=False))
         listening.tasks.set(Task.objects.filter(Q(sentence__lang=lang) & ~Q(sentence__audio="")))
 
 

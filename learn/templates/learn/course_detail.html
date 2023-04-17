@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block extrahead %}
+	<script>
+		const config = {
+			course: "{{ course.pk | escapejs }}",
+			lang: "{{ course.lang.code | escapejs }}",
+		};
+	</script>
+	<script defer src="{% static 'main.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+	<section>
+		<div class="sentence">
+		</div>
+		<ul class="translations">
+		</ul>
+		<div class="ui">
+			<button class="next">Next</button>
+
+			<details>
+				<summary>Settings</summary>
+				<p>Use audio?
+					<input id="use_audio" type="checkbox" checked />
+				</p>
+				<p>Speech synth voice:
+					<select id="voice">
+					</select>
+				</p>
+			</details>
+		</div>
+	</section>
+{% endblock %}

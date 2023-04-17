@@ -1,0 +1,64 @@
+body {
+	margin: 0;
+	padding: 0;
+	height: 100vh;
+
+	font-family: "Lora", serif;
+	text-align: justify;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+main {
+	width: 60%;
+	max-width: 80rem;
+
+	min-height: 100%;
+
+	margin: 0 auto;
+	padding: 1rem;
+
+	border-left: 1px solid black;
+	border-right: 1px solid black;
+}
+
+@media screen and (max-width: 900px) {
+	main {
+		width: 100%;
+	}
+}
+
+section.task {
+
+}
+
+.sentence {
+	text-align: center;
+	font-weight: 700;
+	font-size: 2rem;
+}
+
+.sentence input {
+    all: unset;
+    border: 1px solid black;
+    text-align: center;
+    width: fit-content;
+}
+
+.sentence input[readonly] {
+	border: none;
+}
+
+.translations {
+	border: 1px dashed black;
+	margin: 1rem auto;
+	padding: 1rem 2rem;
+	width: 60%;
+}
+
+a.word {
+	color: black;
+	text-decoration: none;
+}

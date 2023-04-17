@@ -19,6 +19,7 @@ from nltk.tokenize.util import align_tokens
 
 # Learning
 import ebisu
+import random
 
 # Other
 from django.conf import settings
@@ -39,7 +40,7 @@ class Language(models.Model):
 
 
 class User(AbstractUser):
-    languages = models.ManyToManyField(Language, related_name="speakers")
+    speaks_languages = models.ManyToManyField(Language, related_name="speakers")
 
 
 class Sentence(models.Model):
@@ -77,6 +78,8 @@ class Task(models.Model):
     sentence = models.ForeignKey(Sentence, on_delete=models.CASCADE, related_name="tasks")
     hidden = models.PositiveSmallIntegerField()
 
+    objects = TaskQuerySet.as_manager()
+
     def __str__(self):
         return f"{self.before}<X>{self.after}"
 
@@ -111,12 +114,14 @@ class UserTaskProgress(models.Model):
     # Basic information
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_progress")
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="user_progress")
-    last_review = models.DateTimeField()
+    last_review = models.DateTimeField(null=True, blank=True)
 
     # Spaced repetition parameters
     alpha = models.FloatField(default=3.0)
     beta = models.FloatField(default=3.0)
     interval = models.DurationField(null=True) # hours
+
+    objects = UserTaskProgressQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.user}: {self.task}"
@@ -166,6 +171,18 @@ class Course(models.Model):
     name = models.CharField(max_length=128)
     lang = models.ForeignKey(Language, related_name="courses", on_delete=models.CASCADE)
     tasks = models.ManyToManyField(Task, related_name="courses")
+
+    def review_queue(self, user, time=None):
+        if time is None:
+            time = timezone.now()
+
+        return sorted(list(
+            UserTaskProgress.objects
+                .filter(user=user)
+                .filter(task__in=self.tasks.all())
+                .with_scheduled_review()
+                .filter(scheduled_review__lt=time)
+        ), key=UserTaskProgress.predict)
 
     def __str__(self):
         return self.name
