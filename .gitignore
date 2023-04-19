@@ -1,3 +1,9 @@
+# Backup files
+*.bck
+
+# macOS stuff
+.DS_Store
+
 # Data
 data/
 
