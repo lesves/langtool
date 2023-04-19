@@ -167,22 +167,24 @@ class UserTaskProgress(models.Model):
         return self.last_review + self.interval
 
 
-class Course(models.Model):
-    name = models.CharField(max_length=128)
-    lang = models.ForeignKey(Language, related_name="courses", on_delete=models.CASCADE)
-    tasks = models.ManyToManyField(Task, related_name="courses")
-
-    def review_queue(self, user, time=None):
-        if time is None:
-            time = timezone.now()
-
-        return sorted(list(
-            UserTaskProgress.objects
-                .filter(user=user)
-                .filter(task__in=self.tasks.all())
-                .with_scheduled_review()
-                .filter(scheduled_review__lt=time)
-        ), key=UserTaskProgress.predict)
-
-    def __str__(self):
-        return self.name
+# Commenting out Course, might be later changed to Collection
+#
+#class Course(models.Model):
+#    name = models.CharField(max_length=128)
+#    lang = models.ForeignKey(Language, related_name="courses", on_delete=models.CASCADE)
+#    tasks = models.ManyToManyField(Task, related_name="courses")
+#
+#    def review_queue(self, user, time=None):
+#        if time is None:
+#            time = timezone.now()
+#
+#        return sorted(list(
+#            UserTaskProgress.objects
+#                .filter(user=user)
+#                .filter(task__in=self.tasks.all())
+#                .with_scheduled_review()
+#                .filter(scheduled_review__lt=time)
+#        ), key=UserTaskProgress.predict)
+#
+#    def __str__(self):
+#        return self.name
