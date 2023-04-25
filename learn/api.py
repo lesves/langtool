@@ -8,6 +8,8 @@ import typing
 from django.contrib.auth import get_user_model
 from strawberry.django import auth
 
+from langtool.jwtauth import issue_jwt_token
+
 # Models
 from django.db.models import Exists, OuterRef
 from . import models
@@ -111,7 +113,7 @@ class Task:
     @strawberry.django.field
     def progress(self, info: Info) -> typing.Optional["UserTaskProgress"]:
         if not info.context.request.user.is_authenticated:
-            return None
+            return models.UserTaskProgress.objects.none()
         return models.UserTaskProgress.objects.filter(task=self, user=info.context.request.user).first()
 
 
@@ -143,7 +145,7 @@ class TaskFilter:
     def filter_new(self, queryset, info: Info):
         if self.new is not None:
             if not info.context.request.user.is_authenticated:
-                return None
+                return models.Task.objects.none()
 
             query = Exists(
                     models.UserTaskProgress.objects.filter(
@@ -294,6 +296,18 @@ class Mutation:
         )
         progress.attempt(success)
         return progress
+
+    # JWT auth
+
+    @strawberry.mutation
+    def token_auth(self, username: str, password: str) -> typing.Optional[str]:
+        return issue_jwt_token(username, password)
+
+    # Classic login
+    login: typing.Optional[User] = auth.login()
+    logout = auth.logout()
+
+    #register: User = auth.register(UserInput)
 
 
 schema = strawberry.Schema(Query, Mutation)
