@@ -206,7 +206,7 @@ class UserTaskProgressFilter:
     scheduled_review: strawberry.django.filters.FilterLookup[datetime.datetime]
 
     def filter_scheduled_review(self, queryset):
-        filter_kwargs, _ = strawberry.django.filters.build_filter_kwargs(self.next_review)
+        filter_kwargs, _ = strawberry.django.filters.build_filter_kwargs(self.scheduled_review)
         return queryset.with_scheduled_review().filter(
             **{f"scheduled_review__{k}": v for k, v in filter_kwargs.items()}
         )

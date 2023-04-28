@@ -161,7 +161,7 @@ class UserTaskProgress(models.Model):
         return ebisu.predictRecall(model, elapsed, exact=exact)
 
     @property
-    def next_review(self):
+    def scheduled_review(self):
         if self.last_review is None or self.interval is None:
             return None
         return self.last_review + self.interval
