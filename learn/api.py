@@ -240,16 +240,11 @@ def filter_user(queryset, info, **kwargs):
     return models.UserTaskProgress.objects.none()
 
 
-def order_prediction_pre(queryset, info, order=None, **kwargs):
+def order_prediction(queryset, info, order=None, **kwargs):
     if order and order.prediction:
-        order._prediction_order = order.prediction
+        res = sorted(list(queryset), key=models.UserTaskProgress.predict, reverse=order.prediction == strawberry.django.ordering.Ordering.DESC)
         order.prediction = strawberry.UNSET
-    return queryset
-
-
-def order_prediction_post(queryset, info, order=None, **kwargs):
-    if order and hasattr(order, "_prediction_order"):
-        return sorted(list(queryset), key=models.UserTaskProgress.predict, reverse=order._prediction_order == strawberry.django.ordering.Ordering.DESC)
+        return res
     return queryset
 
 
@@ -266,8 +261,8 @@ class Query:
     tasks: typing.Optional[typing.List[Task]] = strawberry.django.field(filters=TaskFilter, pagination=True)
 
     progresses: typing.List[UserTaskProgress] = processed_field(
-        [filter_user, order_prediction_pre], 
-        [order_prediction_post],
+        [filter_user, order_prediction], 
+        [],
         filters=UserTaskProgressFilter, 
         order=UserTaskProgressOrder,
         pagination=True,
