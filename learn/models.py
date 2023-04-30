@@ -109,6 +109,12 @@ class UserTaskProgressQuerySet(models.QuerySet):
                 output_field=models.DateTimeField()
             ))
 
+    def order_by(self, *field_names):
+        if field_names and field_names[0] in ("prediction", "-prediction"):
+            return sorted(super().order_by(*field_names[1:]), key=UserTaskProgress.predict, reverse=field_names[0].startswith("-"))
+
+        return super().order_by(*field_names)
+
 
 class UserTaskProgress(models.Model):
     # Basic information

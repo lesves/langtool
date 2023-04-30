@@ -53,8 +53,14 @@ class Sentence:
     lang: Language
 
     text: str
-    audio: auto
+    audio: typing.Optional[strawberry.django.DjangoFileType]
     translations: typing.List["Sentence"]
+
+    @strawberry.django.field
+    def audio(self):
+        if not self.audio:
+            return None
+        return self.audio
 
 
 @strawberry.django.filters.filter(models.Sentence)
@@ -240,14 +246,6 @@ def filter_user(queryset, info, **kwargs):
     return models.UserTaskProgress.objects.none()
 
 
-def order_prediction(queryset, info, order=None, **kwargs):
-    if order and order.prediction:
-        res = sorted(list(queryset), key=models.UserTaskProgress.predict, reverse=order.prediction == strawberry.django.ordering.Ordering.DESC)
-        order.prediction = strawberry.UNSET
-        return res
-    return queryset
-
-
 #######################
 # Query & Mutation    #
 #######################
@@ -261,7 +259,7 @@ class Query:
     tasks: typing.Optional[typing.List[Task]] = strawberry.django.field(filters=TaskFilter, pagination=True)
 
     progresses: typing.List[UserTaskProgress] = processed_field(
-        [filter_user, order_prediction], 
+        [filter_user], 
         [],
         filters=UserTaskProgressFilter, 
         order=UserTaskProgressOrder,
