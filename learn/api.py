@@ -246,6 +246,10 @@ def filter_user(queryset, info, **kwargs):
     return models.UserTaskProgress.objects.none()
 
 
+def add_scheduled_review(queryset, info, **kwargs):
+    return queryset.with_scheduled_review()
+
+
 #######################
 # Query & Mutation    #
 #######################
@@ -259,7 +263,7 @@ class Query:
     tasks: typing.Optional[typing.List[Task]] = strawberry.django.field(filters=TaskFilter, pagination=True)
 
     progresses: typing.List[UserTaskProgress] = processed_field(
-        [filter_user], 
+        [filter_user, add_scheduled_review], 
         [],
         filters=UserTaskProgressFilter, 
         order=UserTaskProgressOrder,
