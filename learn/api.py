@@ -6,6 +6,7 @@ import typing
 
 # Auth
 from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 from strawberry.django import auth
 
 from langtool.jwtauth import issue_jwt_token
@@ -71,7 +72,7 @@ class SentenceFilter:
     lang: LanguageFilter
 
     audio: strawberry.django.filters.FilterLookup[str]
-    translations: "SentenceFilter"
+    translations: typing.Optional["SentenceFilter"]
 
     has_audio: typing.Optional[bool]
 
@@ -175,6 +176,19 @@ class TaskFilter:
 @strawberry.django.type(get_user_model())
 class User:
     username: auto
+
+
+@strawberry.django.input(get_user_model())
+class UserRegistrationInput:
+    username: auto
+    password1: str
+    password2: str
+
+
+class CustomUserCreationForm(UserCreationForm):
+    class Meta:
+        model = get_user_model()
+        fields = ("username",)
 
 
 #######################
@@ -304,7 +318,13 @@ class Mutation:
     login: typing.Optional[User] = auth.login()
     logout = auth.logout()
 
-    #register: User = auth.register(UserInput)
+    @strawberry.mutation
+    def register(self, data: UserRegistrationInput) -> typing.Optional[User]:
+        form = CustomUserCreationForm(strawberry.asdict(data))
+        if form.is_valid():
+            return form.save()
+        else:
+            raise Exception(form.errors.popitem()[1][0])
 
 
 schema = strawberry.Schema(Query, Mutation)
