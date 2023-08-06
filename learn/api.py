@@ -283,6 +283,7 @@ def add_scheduled_review(queryset, info, **kwargs):
 class Query:
     me: typing.Optional[User] = auth.current_user()
 
+    languages: typing.List[Language] = strawberry.django.field()
     sentences: typing.List[Sentence] = strawberry.django.field(pagination=True)
     words: typing.Optional[typing.List[Word]] = strawberry.django.field(pagination=True)
 
