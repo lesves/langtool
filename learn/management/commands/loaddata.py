@@ -6,10 +6,12 @@ from django.db.models import Q
 
 from django.conf import settings
 
-from learn.models import Language, Sentence, Task, Course
+from learn.models import Language, Sentence, Word
 
+from multilang import normalize, lemmatize
 from wordfreq import word_frequency
-from nltk.tokenize import word_tokenize
+
+from itertools import islice
 
 import csv
 import re
@@ -19,14 +21,14 @@ class Command(BaseCommand):
     help = "Load data for selected language pairs (in settings) to the database"
 
     pairs = settings.LANGTOOL_LANGUAGE_PAIRS
+    nwords = settings.LANGTOOL_LANGUAGE_TOP_N_WORDS
 
     @transaction.atomic
     def handle(self, *args, **options):
         self.setup_languages()
         self.load_sentences()
         self.load_voice()
-        self.create_tasks()
-        self.create_courses()
+        self.link_words()
 
     def setup_languages(self):
         Language.objects.bulk_create([
@@ -35,9 +37,9 @@ class Command(BaseCommand):
         ], ignore_conflicts=True)
 
     def load_sentences(self):
-        for tcode, scode in self.pairs:
-            self.stdout.write(f"Loading {scode}-{tcode} sentences.")
-            with open(f"data/{scode}-{tcode}.tsv") as f:
+        for one, two in self.pairs:
+            self.stdout.write(f"Loading {one}-{two} sentences.")
+            with open(f"data/{two}-{one}-tatoeba.tsv") as f:
                 # Skip BOM
                 if f.read(1) != "\ufeff":
                     f.seek(0)
@@ -48,11 +50,34 @@ class Command(BaseCommand):
                     sent_id = int(sent_id.strip())
                     trans_id = int(trans_id.strip())
 
-                    sent, _ = Sentence.objects.get_or_create(link_id=sent_id, text=sent_text, lang=Language.objects.get(code=scode))
-                    trans, _ = Sentence.objects.get_or_create(link_id=trans_id, text=trans_text, lang=Language.objects.get(code=tcode))
+                    trans, _ = Sentence.objects.get_or_create(link_id=trans_id, text=trans_text, lang=Language.objects.get(code=one))
+                    sent, _ = Sentence.objects.get_or_create(link_id=sent_id, text=sent_text, lang=Language.objects.get(code=two))
                     sent.translations.add(trans)
 
         self.stdout.write(self.style.SUCCESS("Sentences loaded."))
+
+    def link_words(self):
+        for _, code in self.pairs:
+            lang = Language.objects.get(code=code)
+            self.stdout.write(f"Building words for {lang}.")
+
+            with open(f"data/{code}-freq.tsv") as f:
+                reader = csv.reader(f, delimiter="\t")
+
+                for _ in range(self.nwords[code]):
+                    (_, _, w) = next(reader)
+                    Word.objects.get_or_create(text=w, lang=lang)
+
+            self.stdout.write(f"Linking words in {lang} with sentences.")
+
+            for sent in self.tqdm(Sentence.objects.filter(lang=lang)):
+                for w in sent.tokens:
+                    try:
+                        sent.words.add(Word.objects.get(lang=lang, text=normalize(lemmatize(w, code), code)))
+                    except Word.DoesNotExist:
+                        pass
+
+        self.stdout.write(self.style.SUCCESS("Words linked."))
 
     def load_voice(self):
         for _, code in self.pairs:
@@ -67,24 +92,3 @@ class Command(BaseCommand):
                     sent.save()
 
         self.stdout.write(self.style.SUCCESS("Audios loaded."))
-
-    def create_tasks(self):
-        for _, code in self.pairs:
-            self.stdout.write(f"Creating tasks for {code}.")
-
-            lang = Language.objects.get(code=code)
-            for sent in Sentence.objects.filter(lang=lang):
-                _, rarest_idx = min([(wf, i) for i, tok in enumerate(word_tokenize(sent.text, lang.name)) if (wf := word_frequency(tok, "ru")) > 0])
-                task = Task.objects.create(sentence=sent, hidden=rarest_idx)
-
-        self.stdout.write(self.style.SUCCESS("Tasks created."))
-
-    def create_courses(self):
-        for _, code in self.pairs:
-            lang = Language.objects.get(code=code)
-
-            writing = Course.objects.create(lang=lang, name=f"{lang.name} words in context")
-            listening = Course.objects.create(lang=lang, name=f"{lang.name} listening")
-
-            writing.tasks.set(Task.objects.filter(sentence__lang=lang, sentence__translations__isnull=False))
-            listening.tasks.set(Task.objects.filter(Q(sentence__lang=lang) & ~Q(sentence__audio="")))

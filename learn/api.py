@@ -4,6 +4,9 @@ from strawberry import auto
 from strawberry.types import Info
 import typing
 
+import strawberry_django
+from strawberry_django.optimizer import DjangoOptimizerExtension
+
 # Auth
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
@@ -29,13 +32,6 @@ import functools
 #######################
 
 
-@strawberry.django.type(models.Language)
-class Language:
-    code: str
-    name: str
-    native_name: str
-
-
 @strawberry.django.filters.filter(models.Language)
 class LanguageFilter:
     code: auto
@@ -43,36 +39,34 @@ class LanguageFilter:
     native_name: auto
 
 
+@strawberry.django.type(models.Language, filters=LanguageFilter)
+class Language:
+    code: str
+    name: str
+    native_name: str
+
+
 #######################
 # Sentence            #
 #######################
 
 
-@strawberry.django.type(models.Sentence)
-class Sentence:
-    id: strawberry.ID
-    lang: Language
-
-    text: str
-    audio: typing.Optional[strawberry.django.DjangoFileType]
-    translations: typing.List["Sentence"]
-
-    @strawberry.django.field
-    def audio(self):
-        if not self.audio:
-            return None
-        return self.audio
+@strawberry.django.ordering.order(models.Sentence)
+class SentenceOrder:
+    text: auto
 
 
 @strawberry.django.filters.filter(models.Sentence)
 class SentenceFilter:
     id: auto
 
-    text: strawberry.django.filters.FilterLookup[str]
-    lang: LanguageFilter
+    text: typing.Optional[strawberry.django.filters.FilterLookup[str]]
+    lang: typing.Optional[LanguageFilter]
 
-    audio: strawberry.django.filters.FilterLookup[str]
+    audio: typing.Optional[strawberry.django.filters.FilterLookup[str]]
     translations: typing.Optional["SentenceFilter"]
+
+    words: typing.Optional["WordFilter"]
 
     has_audio: typing.Optional[bool]
 
@@ -83,8 +77,6 @@ class SentenceFilter:
 
             if queryset.model == models.Task:
                 key = "sentence__in"
-            elif queryset.model == models.UserTaskProgress:
-                key = "task__sentence__in"
             else:
                 raise NotImplementedError
             return queryset.filter(
@@ -101,62 +93,57 @@ class SentenceFilter:
         return queryset
 
 
-#######################
-# Task                #
-#######################
-
-
-@strawberry.django.type(models.Task)
-class Task:
+@strawberry.django.type(models.Sentence, order=SentenceOrder, filters=SentenceFilter)
+class Sentence:
     id: strawberry.ID
-    sentence: Sentence
-    hidden: int
+    lang: Language
 
-    correct: str
-    before: str
-    after: str
+    text: str
+    audio: typing.Optional[strawberry.django.DjangoFileType]
+    translations: typing.List["Sentence"]
 
+    words: typing.List["Word"]
+
+    tokens: typing.List[str]
+    lemmas: typing.List[str]
+    spans: typing.List[typing.Tuple[int, int]]
 
     @strawberry.django.field
-    def progress(self, info: Info) -> typing.Optional["UserTaskProgress"]:
-        if not info.context.request.user.is_authenticated:
-            return models.UserTaskProgress.objects.none()
-        return models.UserTaskProgress.objects.filter(task=self, user=info.context.request.user).first()
+    def audio(self):
+        if not self.audio:
+            return None
+        return self.audio
 
 
-    @strawberry.field
-    def html(self) -> str:
-        prev = 0
-        res = []
-        for i, span in enumerate(self.sentence.spans):
-            res.append(self.sentence.text[prev:span[0]])
-            if i == self.hidden:
-                res.append(f'<input class="field" type="text" size="{int(len(self.correct)*1.3)}"/>')
-            else:
-                word = escape(self.sentence.text[span[0]:span[1]])
-                link = f"https://kaikki.org/dictionary/{self.sentence.lang.name}/meaning/{word[:1].lower()}/{word[:2].lower()}/{word.lower()}.html"
-                res.append(f'<a class="word" href="{link}" target="_blank" rel="noopener noreferrer">{word}</a>')
-            prev = span[1]
-        res.append(self.sentence.text[prev:])
-        return "".join(res)
+#######################
+# Word                #
+#######################
 
 
-@strawberry.django.filters.filter(models.Task)
-class TaskFilter:
-    id: auto
-    hidden: auto
-    sentence: SentenceFilter
+@strawberry.django.ordering.order(models.Word)
+class WordOrder:
+    text: auto
+    #freq: auto
 
-    new: typing.Optional[bool] = None
+
+@strawberry.django.filters.filter(models.Word)
+class WordFilter:
+    lang: typing.Optional[LanguageFilter]
+    text: typing.Optional[strawberry.django.filters.FilterLookup[str]]
+    freq: typing.Optional[strawberry.django.filters.FilterLookup[float]]
+
+    progress: typing.Optional["UserWordProgressFilter"]
+
+    new: typing.Optional[bool]
 
     def filter_new(self, queryset, info: Info):
         if self.new is not None:
             if not info.context.request.user.is_authenticated:
-                return models.Task.objects.none()
+                return models.Word.objects.none()
 
             query = Exists(
-                    models.UserTaskProgress.objects.filter(
-                        task=OuterRef("pk"),
+                    models.UserWordProgress.objects.filter(
+                        word=OuterRef("pk"),
                         user=info.context.request.user
                     )
                 )
@@ -166,6 +153,29 @@ class TaskFilter:
             queryset = queryset.filter(query)
 
         return queryset
+
+
+@strawberry.django.type(models.Word, filters=WordFilter, order=WordOrder)
+class Word:
+    id: auto
+    lang: Language
+    text: str
+    freq: float
+
+    sentences: typing.List["Sentence"] = strawberry.django.field(pagination=True)
+
+    @strawberry.django.field
+    def random_sentence(self, info: Info, filters: typing.Optional[SentenceFilter] = strawberry.UNSET) -> typing.Optional[Sentence]:
+        qs = self.sentences
+        if filters is not strawberry.UNSET:
+            qs = strawberry_django.filters.apply(filters, qs, info)
+        return qs.random()
+
+    @strawberry.django.field(pagination=True)
+    def progress(self, info: Info) -> typing.Optional["UserWordProgress"]:
+        if not info.context.request.user.is_authenticated:
+            return models.UserWordProgress.objects.none()
+        return models.UserWordProgress.objects.filter(word=self, user=info.context.request.user).first()
 
 
 #######################
@@ -192,14 +202,35 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 #######################
-# UserTaskProgress    #
+# UserWordProgress    #
 #######################
 
 
-@strawberry.django.type(models.UserTaskProgress)
-class UserTaskProgress:
+@strawberry.django.ordering.order(models.UserWordProgress)
+class UserWordProgressOrder:
+    last_review: auto
+    scheduled_review: auto
+    prediction: auto
+
+
+@strawberry.django.filters.filter(models.UserWordProgress)
+class UserWordProgressFilter:
+    word: typing.Optional[WordFilter]
+
+    last_review: typing.Optional[strawberry.django.filters.FilterLookup[datetime.datetime]]
+    scheduled_review: typing.Optional[strawberry.django.filters.FilterLookup[datetime.datetime]]
+
+    def filter_scheduled_review(self, queryset):
+        filter_kwargs, _ = strawberry.django.filters.build_filter_kwargs(self.scheduled_review)
+        return queryset.with_scheduled_review().filter(
+            **{f"scheduled_review__{k}": v for k, v in filter_kwargs.children}
+        )
+
+
+@strawberry.django.type(models.UserWordProgress, filters=UserWordProgressFilter, order=UserWordProgressOrder)
+class UserWordProgress:
     id: strawberry.ID
-    task: Task
+    word: Word
     user: User
     last_review: datetime.datetime
     scheduled_review: datetime.datetime
@@ -209,27 +240,6 @@ class UserTaskProgress:
         if time is not None:
             time = timezone.make_aware(time)
         return self.predict(exact=exact, time=time)
-
-
-@strawberry.django.ordering.order(models.UserTaskProgress)
-class UserTaskProgressOrder:
-    last_review: auto
-    scheduled_review: auto
-    prediction: auto
-
-
-@strawberry.django.filters.filter(models.UserTaskProgress)
-class UserTaskProgressFilter:
-    task: TaskFilter
-
-    last_review: strawberry.django.filters.FilterLookup[datetime.datetime]
-    scheduled_review: strawberry.django.filters.FilterLookup[datetime.datetime]
-
-    def filter_scheduled_review(self, queryset):
-        filter_kwargs, _ = strawberry.django.filters.build_filter_kwargs(self.scheduled_review)
-        return queryset.with_scheduled_review().filter(
-            **{f"scheduled_review__{k}": v for k, v in filter_kwargs.items()}
-        )
 
 
 #######################
@@ -257,7 +267,7 @@ def processed_field(pre_hooks, post_hooks, **kwargs):
 def filter_user(queryset, info, **kwargs):
     if info.context.request.user.is_authenticated:
         return queryset.filter(user=info.context.request.user)
-    return models.UserTaskProgress.objects.none()
+    return models.UserWordProgress.objects.none()
 
 
 def add_scheduled_review(queryset, info, **kwargs):
@@ -273,14 +283,12 @@ def add_scheduled_review(queryset, info, **kwargs):
 class Query:
     me: typing.Optional[User] = auth.current_user()
 
-    sentences: typing.List[Sentence] = strawberry.django.field(filters=SentenceFilter, pagination=True)
-    tasks: typing.Optional[typing.List[Task]] = strawberry.django.field(filters=TaskFilter, pagination=True)
+    sentences: typing.List[Sentence] = strawberry.django.field(pagination=True)
+    words: typing.Optional[typing.List[Word]] = strawberry.django.field(pagination=True)
 
-    progresses: typing.List[UserTaskProgress] = processed_field(
+    progresses: typing.List[UserWordProgress] = processed_field(
         [filter_user, add_scheduled_review], 
         [],
-        filters=UserTaskProgressFilter, 
-        order=UserTaskProgressOrder,
         pagination=True,
     )
 
@@ -289,21 +297,21 @@ class Query:
         return models.Sentence.objects.get(id=id)
 
     @strawberry.django.field
-    def task(self, id: strawberry.ID) -> Task:
-        return models.Task.objects.get(id=id)
+    def word(self, id: strawberry.ID) -> Word:
+        return models.Word.objects.get(id=id)
 
     @strawberry.django.field
-    def progress(self, id: strawberry.ID) -> Task:
-        return models.UserTaskProgress.objects.get(id=id)
+    def progress(self, id: strawberry.ID) -> UserWordProgress:
+        return models.UserWordProgress.objects.get(id=id)
 
 
 @strawberry.type
 class Mutation:
     @strawberry.mutation
-    def attempt(self, info: Info, id: strawberry.ID, success: bool) -> UserTaskProgress:
-        progress, _ = models.UserTaskProgress.objects.get_or_create(
+    def attempt(self, info: Info, id: strawberry.ID, success: bool) -> UserWordProgress:
+        progress, _ = models.UserWordProgress.objects.get_or_create(
             user=info.context.request.user,
-            task=models.Task.objects.get(id=id)
+            word=models.Word.objects.get(id=id)
         )
         progress.attempt(success)
         return progress
@@ -327,4 +335,10 @@ class Mutation:
             raise Exception(form.errors.popitem()[1][0])
 
 
-schema = strawberry.Schema(Query, Mutation)
+schema = strawberry.Schema(
+    Query,
+    Mutation,
+    extensions=[
+        DjangoOptimizerExtension,
+    ]
+)

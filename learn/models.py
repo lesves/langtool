@@ -17,6 +17,10 @@ from django.utils.timezone import timedelta
 from nltk.tokenize import word_tokenize
 from nltk.tokenize.util import align_tokens
 
+from multilang import normalize, lemmatize
+
+from wordfreq import word_frequency
+
 # Learning
 import ebisu
 import random
@@ -43,60 +47,33 @@ class User(AbstractUser):
     speaks_languages = models.ManyToManyField(Language, related_name="speakers")
 
 
-class Sentence(models.Model):
-    lang = models.ForeignKey(Language, related_name="sentences", on_delete=models.CASCADE)
-
-    text = models.TextField()
-
-    link_id = models.PositiveIntegerField(null=True, blank=True, editable=False)
-
-    audio = models.FileField(storage=FileSystemStorage(location="data", base_url="/data"), null=True, blank=True)
-    translations = models.ManyToManyField("Sentence", blank=True, related_name="translation_of")
+class Word(models.Model):
+    lang = models.ForeignKey(Language, on_delete=models.CASCADE, )
+    text = models.CharField(max_length=64)
 
     def __str__(self):
         return self.text
 
     @property
-    def tokens(self):
-        return word_tokenize(self.text, self.lang.name)
-
-    @property
-    def spans(self):
-        try:
-            return align_tokens(self.tokens, self.text)
-        except ValueError:
-            return align_tokens([tok.replace("''", "\"").replace("``", "\"") for tok in self.tokens], self.text)
+    def freq(self):
+        return word_frequency(self.text, self.lang.code)
 
 
-class TaskQuerySet(models.QuerySet):
-    def random(self, n):
-        count = self.aggregate(count=Count("pk"))["count"]
-        return [self[random.randint(0, count-1)] for _ in range(n)]
+class FakeQuerySet:
+    def __init__(self, data):
+        self.data = data
+        self._result_cache = []
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            return FakeQuerySet(self.data[item])
+        return self.data[item]
 
 
-class Task(models.Model):
-    sentence = models.ForeignKey(Sentence, on_delete=models.CASCADE, related_name="tasks")
-    hidden = models.PositiveSmallIntegerField()
-
-    objects = TaskQuerySet.as_manager()
-
-    def __str__(self):
-        return f"{self.before}<X>{self.after}"
-
-    @property
-    def correct(self):
-        return self.sentence.tokens[self.hidden]
-
-    @property
-    def before(self):
-        return self.sentence.text[:self.sentence.spans[self.hidden][0]]
-
-    @property
-    def after(self):
-        return self.sentence.text[self.sentence.spans[self.hidden][1]:]
-
-
-class UserTaskProgressQuerySet(models.QuerySet):
+class UserWordProgressQuerySet(models.QuerySet):
     def with_scheduled_review(self):
         return self.annotate(scheduled_review=models.ExpressionWrapper(
                 F("last_review") + F("interval"),
@@ -111,15 +88,15 @@ class UserTaskProgressQuerySet(models.QuerySet):
 
     def order_by(self, *field_names):
         if field_names and field_names[0] in ("prediction", "-prediction"):
-            return sorted(super().order_by(*field_names[1:]), key=UserTaskProgress.predict, reverse=field_names[0].startswith("-"))
+            return FakeQuerySet(sorted(super().order_by(*field_names[1:]), key=UserWordProgress.predict, reverse=field_names[0].startswith("-")))
 
         return super().order_by(*field_names)
 
 
-class UserTaskProgress(models.Model):
+class UserWordProgress(models.Model):
     # Basic information
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_progress")
-    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="user_progress")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="word_progress")
+    word = models.ForeignKey(Word, on_delete=models.CASCADE, related_name="user_progress")
     last_review = models.DateTimeField(null=True, blank=True)
 
     # Spaced repetition parameters
@@ -127,7 +104,7 @@ class UserTaskProgress(models.Model):
     beta = models.FloatField(default=3.0)
     interval = models.DurationField(null=True) # hours
 
-    objects = UserTaskProgressQuerySet.as_manager()
+    objects = UserWordProgressQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.user}: {self.task}"
@@ -174,6 +151,47 @@ class UserTaskProgress(models.Model):
         if self.last_review is None or self.interval is None:
             return None
         return self.last_review + self.interval
+
+
+class SentenceQuerySet(models.QuerySet):
+    def random(self, randint=random.randint):
+        count = self.aggregate(count=Count("pk"))["count"]
+        if count == 0:
+            return None
+        return self[randint(0, count-1)]
+
+
+class Sentence(models.Model):
+    lang = models.ForeignKey(Language, related_name="sentences", on_delete=models.CASCADE)
+
+    text = models.TextField()
+
+    link_id = models.PositiveIntegerField(null=True, blank=True, editable=False)
+
+    audio = models.FileField(storage=FileSystemStorage(location="data", base_url="/data"), null=True, blank=True)
+    translations = models.ManyToManyField("Sentence", blank=True, related_name="translation_of")
+
+    words = models.ManyToManyField(Word, blank=True, related_name="sentences")
+
+    objects = SentenceQuerySet.as_manager()
+
+    def __str__(self):
+        return self.text
+
+    @property
+    def tokens(self):
+        return word_tokenize(self.text, self.lang.name)
+
+    @property
+    def lemmas(self):
+        return [normalize(lemmatize(t, self.lang.code), self.lang.code) for t in self.tokens]
+
+    @property
+    def spans(self):
+        try:
+            return align_tokens(self.tokens, self.text)
+        except ValueError:
+            return align_tokens([tok.replace("''", "\"").replace("``", "\"") for tok in self.tokens], self.text)
 
 
 # Commenting out Course, might be later changed to Collection

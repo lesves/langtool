@@ -4,10 +4,14 @@ from django.contrib.auth.admin import UserAdmin
 from . import models
 
 
+class SentenceAdmin(admin.ModelAdmin):
+	readonly_fields = ["translations", "words"]
+
+
 admin.site.register(models.User, UserAdmin)
-admin.site.register(models.Sentence)
-admin.site.register(models.Task)
-admin.site.register(models.UserTaskProgress)
+admin.site.register(models.Sentence, SentenceAdmin)
+admin.site.register(models.Word)
+admin.site.register(models.UserWordProgress)
 admin.site.register(models.Language)
 
 # Same as in models.py, commenting out Course
