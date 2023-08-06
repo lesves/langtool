@@ -9,7 +9,7 @@ from django.conf import settings
 from learn.models import Language, Sentence, Word
 
 from multilang import normalize, lemmatize
-from wordfreq import word_frequency
+from wordfreq import word_frequency, zipf_frequency
 
 from itertools import islice
 
@@ -63,17 +63,30 @@ class Command(BaseCommand):
 
             with open(f"data/{code}-freq.tsv") as f:
                 reader = csv.reader(f, delimiter="\t")
+                c = 0
 
-                for _ in range(self.nwords[code]):
+                while c < self.nwords[code]:
                     (_, _, w) = next(reader)
-                    Word.objects.get_or_create(text=w, lang=lang)
+
+                    if not w.isalpha():
+                        continue
+
+                    lw = lemmatize(w, code)
+
+                    if zipf_frequency(lw, code, wordlist="small") <= 3.0:
+                        continue
+
+                    _, created = Word.objects.get_or_create(text=lw, lang=lang, freq=word_frequency(lw, code, wordlist="small"))
+
+                    if created:
+                        c += 1
 
             self.stdout.write(f"Linking words in {lang} with sentences.")
 
             for sent in self.tqdm(Sentence.objects.filter(lang=lang)):
                 for w in sent.tokens:
                     try:
-                        sent.words.add(Word.objects.get(lang=lang, text=normalize(lemmatize(w, code), code)))
+                        sent.words.add(Word.objects.get(lang=lang, text=lemmatize(w, code)))
                     except Word.DoesNotExist:
                         pass
 

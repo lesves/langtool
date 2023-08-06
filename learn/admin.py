@@ -8,9 +8,17 @@ class SentenceAdmin(admin.ModelAdmin):
 	readonly_fields = ["translations", "words"]
 
 
+class WordAdmin(admin.ModelAdmin):
+    list_display = ["text", "lang", "freq"]
+    readonly_fields = ["used_in_sentences"]
+
+    def used_in_sentences(self, obj):
+        return "\n".join((str(s) for s in obj.sentences.all()))
+
+
 admin.site.register(models.User, UserAdmin)
 admin.site.register(models.Sentence, SentenceAdmin)
-admin.site.register(models.Word)
+admin.site.register(models.Word, WordAdmin)
 admin.site.register(models.UserWordProgress)
 admin.site.register(models.Language)
 

@@ -23,6 +23,7 @@ import datetime
 from django.utils import timezone
 
 # Other
+from django.conf import settings
 from django.utils.html import escape
 import functools
 
@@ -44,6 +45,12 @@ class Language:
     code: str
     name: str
     native_name: str
+
+
+@strawberry.type
+class LanguagePair:
+    known: Language
+    learning: Language
 
 
 #######################
@@ -135,6 +142,7 @@ class WordFilter:
     progress: typing.Optional["UserWordProgressFilter"]
 
     new: typing.Optional[bool]
+    only_used: bool = True
 
     def filter_new(self, queryset, info: Info):
         if self.new is not None:
@@ -152,6 +160,11 @@ class WordFilter:
                 query = ~query
             queryset = queryset.filter(query)
 
+        return queryset
+
+    def filter_only_used(self, queryset):
+        if self.only_used:
+            queryset = queryset.exclude(sentences__isnull=True)
         return queryset
 
 
@@ -282,6 +295,16 @@ def add_scheduled_review(queryset, info, **kwargs):
 @strawberry.type
 class Query:
     me: typing.Optional[User] = auth.current_user()
+
+    @strawberry.django.field
+    def language_pairs(self) -> typing.List[LanguagePair]:
+        res = []
+        for code1, code2 in settings.LANGTOOL_LANGUAGE_PAIRS:
+            res.append(LanguagePair(
+                known=models.Language.objects.get(code=code1),
+                learning=models.Language.objects.get(code=code2)
+            ))
+        return res
 
     languages: typing.List[Language] = strawberry.django.field()
     sentences: typing.List[Sentence] = strawberry.django.field(pagination=True)

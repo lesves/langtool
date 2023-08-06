@@ -19,8 +19,6 @@ from nltk.tokenize.util import align_tokens
 
 from multilang import normalize, lemmatize
 
-from wordfreq import word_frequency
-
 # Learning
 import ebisu
 import random
@@ -44,19 +42,20 @@ class Language(models.Model):
 
 
 class User(AbstractUser):
-    speaks_languages = models.ManyToManyField(Language, related_name="speakers")
+    pass
 
 
 class Word(models.Model):
     lang = models.ForeignKey(Language, on_delete=models.CASCADE, )
     text = models.CharField(max_length=64)
 
+    freq = models.FloatField()
+
     def __str__(self):
         return self.text
 
-    @property
-    def freq(self):
-        return word_frequency(self.text, self.lang.code)
+    class Meta:
+        unique_together = [["lang", "text"]]
 
 
 class FakeQuerySet:
@@ -184,7 +183,7 @@ class Sentence(models.Model):
 
     @property
     def lemmas(self):
-        return [normalize(lemmatize(t, self.lang.code), self.lang.code) for t in self.tokens]
+        return [lemmatize(t, self.lang.code) for t in self.tokens]
 
     @property
     def spans(self):

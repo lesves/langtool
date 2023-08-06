@@ -13,10 +13,13 @@ def normalize(word, lang):
 		raise LangError("unsupported language")
 
 
-def lemmatize(word, lang):
+def lemmatize(word, lang, normalize=True, normalize_fn=normalize):
 	if lang in ("ru", "uk"):
 		res = morph.parse(word)
 		if res:
-			return res[0].normal_form
+			if normalize:
+				return normalize_fn(res[0].normal_form, lang)
+			else:
+				return res[0].normal_form
 	else:
 		raise LangError("unsupported language")
