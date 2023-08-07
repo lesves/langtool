@@ -47,8 +47,15 @@ class Language:
     native_name: str
 
 
-@strawberry.type
-class LanguagePair:
+#######################
+# Course              #
+#######################
+
+
+@strawberry.django.type(models.Course)
+class Course:
+    id: strawberry.ID
+
     known: Language
     learning: Language
 
@@ -78,18 +85,6 @@ class SentenceFilter:
     has_audio: typing.Optional[bool]
 
     def filter_has_audio(self, queryset):
-        if queryset.model != models.Sentence:
-            # Fix flaw in django strawberry integration
-            # When sentence is the related object, the filter fails
-
-            if queryset.model == models.Task:
-                key = "sentence__in"
-            else:
-                raise NotImplementedError
-            return queryset.filter(
-                **{key: self.filter_has_audio(models.Sentence.objects.all())}
-            )
-
         if self.has_audio is None:
             pass
         elif self.has_audio:
@@ -130,7 +125,7 @@ class Sentence:
 @strawberry.django.ordering.order(models.Word)
 class WordOrder:
     text: auto
-    #freq: auto
+    freq: auto
 
 
 @strawberry.django.filters.filter(models.Word)
@@ -163,6 +158,18 @@ class WordFilter:
         return queryset
 
     def filter_only_used(self, queryset):
+        if queryset.model != models.Word:
+            # Fix flaw in django strawberry integration
+            # When sentence is the related object, the filter fails
+
+            if queryset.model == models.UserWordProgress:
+                key = "word__in"
+            else:
+                raise NotImplementedError
+            return queryset.filter(
+                **{key: self.filter_only_used(models.Word.objects.all())}
+            )
+
         if self.only_used:
             queryset = queryset.exclude(sentences__isnull=True)
         return queryset
@@ -199,6 +206,7 @@ class Word:
 @strawberry.django.type(get_user_model())
 class User:
     username: auto
+    course: typing.Optional[Course]
 
 
 @strawberry.django.input(get_user_model())
@@ -296,16 +304,7 @@ def add_scheduled_review(queryset, info, **kwargs):
 class Query:
     me: typing.Optional[User] = auth.current_user()
 
-    @strawberry.django.field
-    def language_pairs(self) -> typing.List[LanguagePair]:
-        res = []
-        for code1, code2 in settings.LANGTOOL_LANGUAGE_PAIRS:
-            res.append(LanguagePair(
-                known=models.Language.objects.get(code=code1),
-                learning=models.Language.objects.get(code=code2)
-            ))
-        return res
-
+    courses: typing.List[Course] = strawberry.django.field()
     languages: typing.List[Language] = strawberry.django.field()
     sentences: typing.List[Sentence] = strawberry.django.field(pagination=True)
     words: typing.Optional[typing.List[Word]] = strawberry.django.field(pagination=True)
@@ -357,6 +356,17 @@ class Mutation:
             return form.save()
         else:
             raise Exception(form.errors.popitem()[1][0])
+
+    @strawberry.mutation
+    def set_course(self, info: Info, course_id: strawberry.ID) -> typing.Optional[User]:
+        user = info.context.request.user
+        if not user.is_authenticated:
+            return None
+
+        user.course = models.Course.objects.get(id=course_id)
+        user.save()
+        
+        return user
 
 
 schema = strawberry.Schema(

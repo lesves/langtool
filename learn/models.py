@@ -41,12 +41,20 @@ class Language(models.Model):
         return self.name
 
 
+class Course(models.Model):
+    known = models.ForeignKey(Language, related_name="known_in", on_delete=models.CASCADE)
+    learning = models.ForeignKey(Language, related_name="learning_in", on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.known}-{self.learning}"
+
+
 class User(AbstractUser):
-    pass
+    course = models.ForeignKey(Course, null=True, blank=True, related_name="learners", on_delete=models.SET_NULL)
 
 
 class Word(models.Model):
-    lang = models.ForeignKey(Language, on_delete=models.CASCADE, )
+    lang = models.ForeignKey(Language, on_delete=models.CASCADE, related_name="words")
     text = models.CharField(max_length=64)
 
     freq = models.FloatField()
@@ -106,7 +114,7 @@ class UserWordProgress(models.Model):
     objects = UserWordProgressQuerySet.as_manager()
 
     def __str__(self):
-        return f"{self.user}: {self.task}"
+        return f"{self.user}: {self.word}"
 
     def attempt(self, success, time=None, save=True):
         if time is None:
@@ -151,6 +159,9 @@ class UserWordProgress(models.Model):
             return None
         return self.last_review + self.interval
 
+    class Meta:
+        verbose_name_plural = "User word progresses"
+
 
 class SentenceQuerySet(models.QuerySet):
     def random(self, randint=random.randint):
@@ -191,26 +202,3 @@ class Sentence(models.Model):
             return align_tokens(self.tokens, self.text)
         except ValueError:
             return align_tokens([tok.replace("''", "\"").replace("``", "\"") for tok in self.tokens], self.text)
-
-
-# Commenting out Course, might be later changed to Collection
-#
-#class Course(models.Model):
-#    name = models.CharField(max_length=128)
-#    lang = models.ForeignKey(Language, related_name="courses", on_delete=models.CASCADE)
-#    tasks = models.ManyToManyField(Task, related_name="courses")
-#
-#    def review_queue(self, user, time=None):
-#        if time is None:
-#            time = timezone.now()
-#
-#        return sorted(list(
-#            UserTaskProgress.objects
-#                .filter(user=user)
-#                .filter(task__in=self.tasks.all())
-#                .with_scheduled_review()
-#                .filter(scheduled_review__lt=time)
-#        ), key=UserTaskProgress.predict)
-#
-#    def __str__(self):
-#        return self.name

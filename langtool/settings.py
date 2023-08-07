@@ -141,10 +141,12 @@ AUTH_USER_MODEL = "learn.User"
 LANGTOOL_LANGUAGES = [
     ("cs", "Czech", "Čeština"),
     ("ru", "Russian", "Русский"),
+    ("en", "English", "English")
 ]
 
 LANGTOOL_LANGUAGE_PAIRS = [
     ("cs", "ru"),
+    ("cs", "en"),
 ]
 
 LANGTOOL_LANGUAGE_TOP_N_WORDS = {
