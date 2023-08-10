@@ -190,7 +190,7 @@ class Sentence(models.Model):
 
     @property
     def tokens(self):
-        return word_tokenize(self.text, self.lang.name)
+        return word_tokenize(self.text, self.lang.name.lower())
 
     @property
     def lemmas(self):
