@@ -1,5 +1,10 @@
+import simplemma
+
 import pymorphy3
 morph = pymorphy3.MorphAnalyzer()
+
+
+supported = ("cs", "en", "ru")
 
 
 class LangError(Exception):
@@ -7,19 +12,25 @@ class LangError(Exception):
 
 
 def normalize(word, lang):
-	if lang == "ru":
+	if lang == "cs":
+		return word.lower()
+	elif lang == "en":
+		return word.lower()
+	elif lang == "ru":
 		return word.lower().replace("ё", "е")
 	else:
 		raise LangError("unsupported language")
 
 
 def lemmatize(word, lang, normalize=True, normalize_fn=normalize):
+	if lang not in supported:
+		raise LangError("unsupported language")
+
+	norm = lambda x: normalize_fn(x, lang) if normalize else x
+
 	if lang in ("ru", "uk"):
 		res = morph.parse(word)
 		if res:
-			if normalize:
-				return normalize_fn(res[0].normal_form, lang)
-			else:
-				return res[0].normal_form
+			return norm(res[0].normal_form)
 	else:
-		raise LangError("unsupported language")
+		return norm(simplemma.lemmatize(word, lang=lang))
