@@ -36,6 +36,10 @@ class Command(BaseCommand):
         self.nwords = options["nwords"]
         self.nsents = options["nsents"]
 
+        self.course, created = Course.objects.get_or_create(known=self.source, learning=self.target)
+        if created:
+            raise CommandError(f"Course {self.course} already exists.")
+
         sent_file = Path("data") / f"{self.target.code}-{self.source.code}.tsv"
         voice_file = Path("data/commonvoice/") / self.target.code / "clips.tsv"
 
