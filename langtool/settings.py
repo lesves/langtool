@@ -144,13 +144,4 @@ LANGTOOL_LANGUAGES = [
     ("en", "English", "English")
 ]
 
-LANGTOOL_LANGUAGE_PAIRS = [
-    ("cs", "ru"),
-    ("cs", "en"),
-]
-
-LANGTOOL_LANGUAGE_TOP_N_WORDS = {
-    "ru": 10_000,
-}
-
 INITIAL_INTERVAL = (0.25, 4) # (failure, success) in hours
