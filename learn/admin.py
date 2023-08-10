@@ -11,12 +11,18 @@ class CustomUserAdmin(UserAdmin):
 
 
 class SentenceAdmin(admin.ModelAdmin):
-	readonly_fields = ["translations", "words"]
+    list_display = ["text", "lang"]
+    readonly_fields = ["translations", "words"]
+    list_filter = ["lang"]
 
 
 class WordAdmin(admin.ModelAdmin):
-    list_display = ["text", "lang", "freq"]
+    list_display = ["text", "lang", "freq", "number_of_sentences"]
     readonly_fields = ["used_in_sentences"]
+    list_filter = ["lang"]
+
+    def number_of_sentences(self, obj):
+        return obj.sentences.count()
 
     def used_in_sentences(self, obj):
         return "\n".join((str(s) for s in obj.sentences.all()))
