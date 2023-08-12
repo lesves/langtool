@@ -1,0 +1,3 @@
+[submodule "langtool_mobile"]
+	path = langtool_mobile
+	url = git@github.com:lesves/langtool_mobile.git
