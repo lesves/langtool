@@ -5,7 +5,8 @@
 .DS_Store
 
 # Data
-data/
+data/*
+!data/commonvoice_extract.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
