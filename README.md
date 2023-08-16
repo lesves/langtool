@@ -37,6 +37,7 @@ Nejprve je nutné vyjmenovat jazyky v `settings.py` a poté připravit data k ni
 
 Pak je třeba postupně přidat následujícím způsobem všechny podporované jazykové páry a můžeme spustit server:
 ```
+pip3 install -r requirements.txt
 python3 manage.py migrate
 python3 manage.py addpair cs en
 python3 manage.py addpair cs ru
